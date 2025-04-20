@@ -20,8 +20,8 @@ FROM gcr.io/distroless/static as app
 WORKDIR /app
 COPY --from=build /go/src/cmd/openbooks/openbooks .
 
-EXPOSE 80
+EXPOSE 8084
 VOLUME [ "/books" ]
 ENV BASE_PATH=/
 
-ENTRYPOINT ["./openbooks", "server", "--dir", "/books", "--port", "80"]
+ENTRYPOINT ["./openbooks", "server", "--dir", "/books", "--port", "8084"]
