@@ -1,7 +1,10 @@
 # This is a basic workflow to help you get started with Actions
 
 name: Publish Image to Docker Registries
-
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
 on:
@@ -20,73 +23,29 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
-        
-      - name: Set Docker Platforms For Branch
-        run: |
-          if [[ $GITHUB_REF == 'refs/heads/development' ]]; then
-              echo "DOCKER_PLATFORMS=linux/amd64" >> "$GITHUB_ENV"
-          else
-              echo "DOCKER_PLATFORMS=linux/amd64,linux/arm64,linux/arm" >> "$GITHUB_ENV"
-          fi
+        uses: actions/checkout@v4
 
-      - name: Set Docker Metadata
-        id: meta
-        uses: docker/metadata-action@v4
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
-          # list of Docker images to use as base name for tags
-          images: |
-            evanbuss/openbooks
-            ghcr.io/${{ github.repository }}
-          # generate Docker tags based on the following events/attributes
-          # 'latest' when push to master with tag
-          # 'edge' when push to development
-          # '1.1.1' when push version tag v1.1.1
-          flavor: |
-            latest=auto
-          tags: |
-            # set latest tag for default branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=edge,branch=development
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-        with:
-          version: latest
-          install: true
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push
-        uses: docker/build-push-action@v3
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        id: PUSH
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
-          platforms: ${{ env.DOCKER_PLATFORMS }}
+          file: ${{ env.dockerfile }}
           push: true
-          labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
-
-      - name: Docker Hub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: evanbuss/openbooks
-          short-description: IRC Highway eBook Downloads
-          readme-filepath: ./docker.md
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ARCH=amd64
